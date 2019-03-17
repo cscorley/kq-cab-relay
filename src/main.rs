@@ -1,3 +1,4 @@
+extern crate clap;
 extern crate reqwest;
 extern crate websocket;
 
@@ -5,19 +6,50 @@ use std::sync::mpsc::channel;
 use std::thread;
 use std::time::Duration;
 
+use clap::{App, Arg};
 use reqwest::header::CONTENT_TYPE;
-
 use websocket::client::ClientBuilder;
 use websocket::OwnedMessage;
 
-const CONNECTION: &'static str = "ws://192.168.50.3:12749";
-//const CONNECTION: &'static str = "ws://127.0.0.1:12749";
+const LOCALHOST: &'static str = "127.0.0.1";
+const LOCALHOST_HTTP: &'static str = "http://127.0.0.1";
 
 fn main() {
-    println!("Connecting to {}", CONNECTION);
+    let matches = App::new("KQ Cab Relay")
+        .version("0.1.0")
+        .author("Christopher S. Corley <cscorley@gmail.com>")
+        .about("Uploads stuff from a KQ cab to a server API")
+        .arg(
+            Arg::with_name("cab")
+                .short("c")
+                .long("cab")
+                .value_name("CAB ADDRESS")
+                .help("Sets address of the cab")
+                .takes_value(true),
+        )
+        .arg(
+            Arg::with_name("destination")
+                .short("d")
+                .long("destination")
+                .value_name("DESTINATION ADDRESS")
+                .help("Sets address of the destination")
+                .takes_value(true),
+        )
+        .get_matches();
+
+    let cab_address = matches.value_of("cab").unwrap_or(LOCALHOST).to_owned();
+    let destination_address = matches
+        .value_of("destination")
+        .unwrap_or(LOCALHOST_HTTP)
+        .to_owned();
+
+    println!(
+        "Connecting to {}, submitting data to {}",
+        cab_address, destination_address
+    );
 
     let http_client = reqwest::Client::new();
-    let ws_client = ClientBuilder::new(CONNECTION)
+    let ws_client = ClientBuilder::new(format!("ws://{}:12749", cab_address).as_str())
         .unwrap()
         .add_protocol("rust-websocket")
         .connect_insecure()
@@ -102,8 +134,7 @@ fn main() {
                         let (first, _) = last.split_at(last.len() - 3);
                         println!("Bracket: {:?}", first);
                         let result = http_client
-                            .post("http://killer-queen-chattanooga.herokuapp.com/api/cab/bracket")
-                            //.post("http://localhost:5000/api/cab/bracket")
+                            .post(format!("{}/api/cab/bracket", destination_address).as_str())
                             .body(first.to_owned())
                             .header(CONTENT_TYPE, "application/json")
                             .send();
@@ -123,10 +154,7 @@ fn main() {
                         };
                         println!("GoldOnLeft: {:?}", gold_on_left);
                         let result = http_client
-                            .post(
-                                "http://killer-queen-chattanooga.herokuapp.com/api/cab/goldonleft",
-                            )
-                            //.post("http://localhost:5000/api/cab/goldonleft")
+                            .post(format!("{}/api/cab/goldonleft", destination_address).as_str())
                             .body(gold_on_left)
                             .header(CONTENT_TYPE, "application/json")
                             .send();
