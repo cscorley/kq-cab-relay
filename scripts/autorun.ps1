@@ -2,6 +2,8 @@ $cabAddress = "127.0.0.1"
 $destinationAddress = "http://127.0.0.1"
 
 $url = "https://api.github.com/repos/cscorley/kq-cab-relay/releases/latest"
+
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 $latest = Invoke-RestMethod -Method Get -Uri $url
 
 $currentFile = "current"
@@ -16,6 +18,8 @@ if ($currentTag -ne $latest.tag_name)
 
     $zipUrl = $latest.assets[0].browser_download_url
     $zipLocal = "kqcabrelay.zip"
+
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
     Invoke-WebRequest -Method Get -Uri $zipUrl -OutFile $zipLocal
 
     Set-Content -Path $currentFile -Value $latest.tag_name
