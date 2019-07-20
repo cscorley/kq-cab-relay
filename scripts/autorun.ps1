@@ -1,5 +1,6 @@
 $cabAddress = "127.0.0.1"
 $destinationAddress = "http://127.0.0.1"
+$scoreDestinationAddress = "http://127.0.0.1:8888/api/a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11"
 
 $url = "https://api.github.com/repos/cscorley/kq-cab-relay/releases/latest"
 
@@ -33,7 +34,7 @@ while ($true)
 {
     try
     {
-        .\kqcabrelay.exe --cab $cabAddress --destination $destinationAddress
+        .\kqcabrelay.exe --cab $cabAddress --destination $destinationAddress --score-destination $scoreDestinationAddress
     }
     catch
     {
