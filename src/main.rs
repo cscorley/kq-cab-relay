@@ -30,9 +30,18 @@ fn setup_logger() -> Result<(), fern::InitError> {
                 message
             ))
         })
-        .level(log::LevelFilter::Info)
-        .chain(std::io::stdout())
-        .chain(fern::log_file(filename)?)
+        .chain(
+            fern::Dispatch::new()
+                .level(log::LevelFilter::Info)
+                .level_for("kqcabrelay", log::LevelFilter::max())
+                .chain(std::io::stdout()),
+        )
+        .chain(
+            fern::Dispatch::new()
+                .level(log::LevelFilter::Error)
+                .level_for("kqcabrelay", log::LevelFilter::Info)
+                .chain(fern::log_file(filename)?),
+        )
         .apply()?;
     Ok(())
 }
@@ -88,7 +97,7 @@ fn main() {
             .unwrap_or(LOCALHOST_HTTP)
             .to_owned();
 
-        println!(
+        debug!(
             "Connecting to {}, submitting data to {}, {}",
             cab_address, destination_address, score_destination_address
         );
@@ -100,7 +109,7 @@ fn main() {
             .connect_insecure()
             .unwrap();
 
-        println!("Successfully connected");
+        debug!("Successfully connected");
 
         let (mut receiver, mut sender) = ws_client.split().unwrap();
 
@@ -114,7 +123,7 @@ fn main() {
                 let message = match rx.recv() {
                     Ok(m) => m,
                     Err(e) => {
-                        println!("Send Loop: {:?}", e);
+                        debug!("Send Loop: {:?}", e);
                         continue;
                     }
                 };
@@ -127,13 +136,13 @@ fn main() {
                     _ => (),
                 }
 
-                println!("Sending Loop: {:?}", message);
+                debug!("Sending Loop: {:?}", message);
 
                 // Send the message
                 match sender.send_message(&message) {
                     Ok(()) => (),
                     Err(e) => {
-                        println!("Send Loop: {:?}", e);
+                        debug!("Send Loop: {:?}", e);
                         //let _ = sender.send_message(&Message::close());
                         continue;
                     }
@@ -143,6 +152,8 @@ fn main() {
 
         let receive_loop = thread::spawn(move || {
             let mut gold_on_left = false;
+            let mut bonus_game = false;
+            let mut spawn_count = 0;
 
             // Receive loop
             for message in receiver.incoming_messages() {
@@ -186,34 +197,46 @@ fn main() {
                                 .header(CONTENT_TYPE, "application/json")
                                 .send();
                         } else if text.starts_with("![k[victory],") {
-                            let gold_win = text.contains("Gold");
-                            let player_id = if gold_win {
-                                if gold_on_left {
-                                    0
+                            if !bonus_game {
+                                let gold_win = text.contains("Gold");
+                                let player_id = if gold_win {
+                                    if gold_on_left {
+                                        0
+                                    } else {
+                                        1
+                                    }
                                 } else {
-                                    1
-                                }
-                            } else {
-                                // blue win
-                                if gold_on_left {
-                                    1
-                                } else {
-                                    0
-                                }
-                            };
-                            let _ = http_client
-                                .post(
-                                    format!(
-                                        "{}/player/{}/increment-score",
-                                        score_destination_address, player_id
+                                    // blue win
+                                    if gold_on_left {
+                                        1
+                                    } else {
+                                        0
+                                    }
+                                };
+                                let _ = http_client
+                                    .post(
+                                        format!(
+                                            "{}/player/{}/increment-score",
+                                            score_destination_address, player_id
+                                        )
+                                        .as_str(),
                                     )
-                                    .as_str(),
-                                )
-                                .send();
+                                    .send();
+                            }
+
+                            spawn_count = 0;
+                            bonus_game = false;
+                        } else if text.starts_with("![k[spawn],") {
+                            spawn_count += 1;
+                        } else if text.starts_with("![k[gamestart],") {
+                            if spawn_count < 10 {
+                                bonus_game = true;
+                                debug!("Looks like a bonus game to me");
+                            }
                         }
                     }
                     // Say what we received
-                    _ => println!("Receive Loop: {:?}", message),
+                    _ => debug!("Receive Loop: {:?}", message),
                 }
             }
         });
@@ -231,18 +254,18 @@ fn main() {
                 }
             }
             Err(e) => {
-                println!("Main Loop error on connect: {:?}", e);
+                debug!("Main Loop error on connect: {:?}", e);
             }
         }
 
         // We're exiting
 
-        println!("Waiting for child threads to exit");
+        debug!("Waiting for child threads to exit");
 
         let _ = send_loop.join();
         let _ = receive_loop.join();
 
-        println!("Reconnecting in 30 seconds");
+        debug!("Reconnecting in 30 seconds");
         thread::sleep(Duration::from_secs(30));
     }
 }
