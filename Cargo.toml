@@ -5,7 +5,7 @@ authors = ["Christopher S. Corley <cscorley@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-websocket = "0.23.0"
+websocket = "0.26.5"
 reqwest = "0.9.22"
 clap = "2.33.0"
 log = "0.4"
